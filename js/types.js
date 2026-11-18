@@ -40,7 +40,7 @@
   ];
   // 측정 기기명은 목록에서 선택 — 기기가 늘면 options에 추가
   const GAS_FIELDS = [
-    { key: 'gasMeter', label: '측정 기기명', type: 'select', options: ['복합가스측정기', 'TD-11'], default: '복합가스측정기' },
+    { key: 'gasMeter', label: '측정 기기명', type: 'select', options: ['GD5000', '복합가스측정기'], default: 'GD5000' },
     { key: 'measurer', label: '측정인', default: '' }
   ];
 

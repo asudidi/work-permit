@@ -77,7 +77,7 @@
     d.id = null; d.no = ''; d.noMode = 'auto'; d.status = '발행';
     d.issueDate = ''; d.workDate = ''; d.timeFrom = ''; d.timeTo = '';
     Object.values(d.sheets).forEach(s => { s.gasTimes = ['', '', '', '']; });
-    ['createdAt', 'updatedAt', 'authorId', 'authorName', 'authorDept', 'permitNo'].forEach(k => delete d[k]);
+    ['createdAt', 'updatedAt', 'authorId', 'authorName', 'authorDept', 'permitNo', 'signs'].forEach(k => delete d[k]);   // 서명은 복사하지 않음
     return d;
   }
 

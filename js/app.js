@@ -158,7 +158,7 @@
     view.innerHTML = `
       <div class="page-head">
         <div><h1>${mode === 'edit' ? '허가서 수정' : '새 안전작업허가서'}</h1>
-          <div class="muted small">함께 고른 허가서는 모두 같은 발행번호로 발행됩니다. 이름만 입력하고 (인)은 출력 후 종이에 서명합니다.</div></div>
+          <div class="muted small">함께 고른 허가서는 모두 같은 발행번호로 발행됩니다. (인)은 저장 후 허가서 화면의 [손서명](QR·직접)으로 받거나, 출력 후 종이에 서명합니다.</div></div>
         <div class="actions">
           <a class="btn ghost" href="${mode === 'edit' ? '#/view/' + esc(d.id) : '#/list'}">취소</a>
           <button class="btn" data-save>저장</button>
@@ -201,7 +201,7 @@
       </section>
 
       <section class="card">
-        <h2><span class="step">3</span>신청인 · 발급자 · 승인자 <small class="muted">이름 입력 (인은 종이 서명)</small></h2>
+        <h2><span class="step">3</span>신청인 · 발급자 · 승인자 <small class="muted">이름 입력 (서명은 저장 후 [손서명] 또는 종이)</small></h2>
         <div class="grid3">${person('applicant', '신청인')}${person('issuer', '발급자')}${person('approver', '승인자')}</div>
       </section>
 
@@ -342,7 +342,8 @@
       if (errs.length) { alert(errs.join('\n')); return; }
       Object.keys(d.sheets).forEach(k => { if (!d.types.includes(k)) delete d.sheets[k]; });
       const btns = view.querySelectorAll('[data-save]'); btns.forEach(b => busy(b, true));
-      api('savePermit', TOKEN, d)
+      const body = Object.assign({}, d); delete body.signs;   // 서명은 따로 저장되어 있음
+      api('savePermit', TOKEN, body)
         .then(r => { rememberPeople(d); toast('저장했습니다.'); go('#/view/' + r.id); })
         .catch(fail).finally(() => btns.forEach(b => busy(b, false)));
     }
@@ -357,7 +358,10 @@
   function drawPermit(v, r) {
     const canEdit = isAdmin() || r.authorId === ME.userId;
     const types = TYPES.filter(t => r.types.includes(t.id));
-    const ctx = { esc, nl, linkedOn, recNo, unapproved: false };
+    // 손서명: 서명한 칸은 인쇄물에 이름 + 서명 그림 (sign.js)
+    const ctx = { esc, nl, linkedOn, recNo, unapproved: false, signOf: (tid, key) => (r.signs || {})[window.SignKit.fsId(tid, key)] || null };
+    const sheetsHtml = () => types.map(t => `<div class="sheet-wrap" data-sheet="${t.id}">${
+      window.PermitFormLayout.render(r, t, ctx) || `<article class="sheet"><p>「${esc(t.name)}」 양식 위치표가 없습니다.</p></article>`}</div>`).join('');
     v.innerHTML = `
       <div class="no-print">
         <div class="page-head">
@@ -380,10 +384,16 @@
             <button class="btn ghost sm" id="stBtn">상태 변경</button></div>` : ''}
           <p class="hint" style="margin-bottom:0">인쇄 창에서 용지 A4, 배율 100%(또는 '실제 크기'), 여백 '없음', '배경 그래픽' 사용을 확인하세요.</p>
         </div>
+        <div id="signPanel"></div>
       </div>
-      <div class="sheets">${types.map(t => `<div class="sheet-wrap" data-sheet="${t.id}">${
-        window.PermitFormLayout.render(r, t, ctx) || `<article class="sheet"><p>「${esc(t.name)}」 양식 위치표가 없습니다.</p></article>`}</div>`).join('')}</div>`;
+      <div class="sheets" id="sheetsBox">${sheetsHtml()}</div>`;
     window.PrintKit.fitPdfText(v);
+    // 새 서명이 들어오면 인쇄 양식을 다시 그림 (인쇄할 장 선택은 유지)
+    window.SignKit.panel(v.querySelector('#signPanel'), r, TOKEN, () => {
+      v.querySelector('#sheetsBox').innerHTML = sheetsHtml();
+      window.PrintKit.fitPdfText(v);
+      refresh();
+    });
     const refresh = () => {
       let first = true;
       v.querySelectorAll('.sheet-wrap').forEach(w => {
@@ -456,9 +466,11 @@
 
   /* ---------- 라우터 ---------- */
   function route() {
-    if (!TOKEN || !ME) return renderAuth('login');
     const h = (location.hash || '#/list').replace(/^#\/?/, '');
-    const [page, arg] = h.split('/');
+    const [page, arg, code] = h.split('/');
+    // QR로 들어온 서명 화면은 로그인 없이 (열린 QR의 열쇠가 맞을 때만 서명 가능)
+    if (page === 'sign' && arg && code) return window.SignKit.visitorPage(app, decodeURIComponent(arg), decodeURIComponent(code));
+    if (!TOKEN || !ME) return renderAuth('login');
     if (page === 'new') {
       const v = shell('new');
       const draft = window.__copyDraft || blankDraft(); window.__copyDraft = null;
@@ -473,6 +485,7 @@
 
   /* ---------- 시작 ---------- */
   (function init() {
+    if (/^#\/sign\//.test(location.hash)) return route();
     const t = loadToken();
     if (!t) return renderAuth('login');
     app.innerHTML = '<div class="card auth empty">접속 중…</div>';

@@ -121,16 +121,19 @@
     const box = (cx, cy, mark) => o.push(`<i class="fl-box ${mark || ''}" style="left:${cx - 11}px;top:${cy - 11}px"></i>`);
     const circ = (cx, cy) => o.push(`<i class="fl-circ" style="left:${cx - 11}px;top:${cy - 11}px"></i>`);
     const IN = '(인)';
-    const sig = () => {};
+    // 손서명 (sign.js): 서명한 칸은 (인) 위에 서명 그림, 이름 칸에는 서명한 사람 이름
+    const signOf = key => (ctx.signOf ? ctx.signOf(t.id, key) : null);
+    const sigImg = (cx, cy, key) => { const s = signOf(key); if (s && s.image) o.push(`<img class="fl-sig" src="${esc(s.image)}" alt="" style="left:${cx - 85}px;top:${cy - 50}px">`); };
+    const sname = key => { const s = signOf(key); return s ? esc(s.name) : ''; };
+    const sig = (cx, cy, role) => sigImg(cx, cy, role);
     const B = P.bottom;
     // 바깥 테두리를 위 여백(서류철용)에 맞춰 놓고, 아래·좌우는 최소 여백을 지키도록 같은 비율로 확대·축소
     const mTop = MARGIN_TOP_MM * PX_MM, mSide = MARGIN_SIDE_MM * PX_MM, mBot = MARGIN_BOTTOM_MM * PX_MM;
     const sx = Math.min((PAPER_W - 2 * mSide) / (R - L), (PAPER_H - mTop - mBot) / (B - FRAME_TOP)), sy = sx;
     const offX = (PAPER_W - (R - L) * sx) / 2 - L * sx, offY = mTop - FRAME_TOP * sy;
-    // 폰으로 받은 현장 서명(업체 등) — (인) 글자 위에 겹쳐 표시. key: fieldsign.js 의 칸 이름
-    // (이 사이트는 전자서명을 쓰지 않음) 사이트에서 입력한 이름(r.names)을 (인) 앞에 찍고, (인)은 비워 둠
-    const fsig = () => {};
-    const fname = key => esc((r.names || {})[key] || '');
+    // 현장 손서명 — (인) 글자 위에 겹쳐 표시. 이름은 서명한 사람 이름 → 없으면 사이트에서 입력한 이름(r.names)
+    const fsig = (cx, cy, key) => sigImg(cx, cy, key);
+    const fname = key => sname(key) || esc((r.names || {})[key] || '');
     const forg = key => esc((r.names || {})[key] || '');
     // 측정값은 항상 빈칸 (현장에서 수기 기록)
     const gv = () => '';
@@ -154,7 +157,7 @@
     at(HEAD_X.ap, P.apY, '신&nbsp;&nbsp;청&nbsp;&nbsp;인&nbsp;:', {});
     at(HEAD_X.apDept[0], P.apY, '부서'); ctr(HEAD_X.apDept[1], HEAD_X.apDept[2], P.apY, esc(ap.dept));
     at(HEAD_X.apTitle[0], P.apY, '직책'); ctr(HEAD_X.apTitle[1], HEAD_X.apTitle[2], P.apY, esc(ap.title));
-    at(HEAD_X.apName[0], P.apY, '성명'); ctr(HEAD_X.apName[1], HEAD_X.apName[2], P.apY, esc(ap.name));
+    at(HEAD_X.apName[0], P.apY, '성명'); ctr(HEAD_X.apName[1], HEAD_X.apName[2], P.apY, sname('applicant') || esc(ap.name));
     at(HEAD_X.apIn, P.apY, IN);
     hl(P.apUl, HEAD_X.apUl[0], HEAD_X.apUl[1], 2);
     sig(1081, P.apY, 'applicant');
@@ -251,7 +254,7 @@
       at(930, ry1, '업체명 :'); at(1053, ry1, esc(r.contractor) || forg('worker'), { x1: R - 10 });
       at(929, ry2, '성&nbsp;&nbsp;&nbsp;&nbsp;명 :');
       hl(ry2 + 18, 1079, 1329, 2);
-      ctr(1079, 1270, ry2, esc(r.worker) || fname('worker'));
+      ctr(1079, 1270, ry2, sname('worker') || esc(r.worker) || fname('worker'));
       tx(1260, ry2 - 22, 1329, ry2 + 22, IN, { a: 'r', fit: false });
       fsig(1299, ry2, 'worker');
     }
@@ -354,7 +357,7 @@
       at(APV.lab, y, lab2);
       at(APV.dept[0], y, '부서'); ctr(APV.dept[1], APV.dept[2], y, esc(p.dept));
       at(APV.title[0], y, '직책'); ctr(APV.title[1], APV.title[2], y, esc(p.title));
-      at(APV.name[0], y, '성명'); ctr(APV.name[1], APV.name[2], y, esc(p.name));
+      at(APV.name[0], y, '성명'); ctr(APV.name[1], APV.name[2], y, sname(role) || esc(p.name));
       at(APV.inn, y, IN);
       sig(831, y, role);
     });
@@ -388,7 +391,7 @@
       ys.forEach((y, i) => {
         labs[i].forEach((ch, k) => at(labX + k * 80, y, ch));
         at(labX + 197, y, ':');
-        ctr(valX[0], valX[1], y, esc(names[i]) || fname(keys[i]));
+        ctr(valX[0], valX[1], y, sname(keys[i]) || esc(names[i]) || fname(keys[i]));
         at(inX, y, IN);
         fsig(inX + 23, y, keys[i]);
       });

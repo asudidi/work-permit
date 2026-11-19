@@ -121,6 +121,39 @@ canvas.sigpad { width: 100%; height: 230px; border: 2px dashed #b8bec6; border-r
 .sg-md { background: #fff; border-radius: 12px; width: min(560px, 100%); max-height: 95vh; overflow: auto; }
 .sg-md-h { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 16px; }
 .sg-md-b { padding: 14px 16px 16px; }
+/* 칸 고르기: 역할 줄 + 허가서 칩 */
+.sg-share { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 6px; }
+.sg-url { font-size: 12px; color: var(--sub); background: #fff; margin-bottom: 6px; }
+.sg-pickwrap { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.sg-pickhead { margin-bottom: 6px; }
+.sp-sec { margin-bottom: 4px; }
+.sp-role { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; background: #fff; }
+.sp-role.on { border-color: var(--pri); box-shadow: 0 0 0 2px #1f5fae1f; }
+.sp-rh { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 15px; }
+.sp-all { border: 1.5px solid var(--pri); background: #fff; color: var(--pri); border-radius: 16px; padding: 4px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.sp-all.on { background: var(--pri); color: #fff; }
+.sp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px; border: 2px solid color-mix(in srgb, var(--c) 45%, #fff); border-radius: 20px; background: #fff;
+  color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.sp-chip .sp-tick { width: 18px; height: 18px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--c) 60%, #fff); display: inline-grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; flex: none; }
+.sp-chip.on { background: color-mix(in srgb, var(--c) 12%, #fff); border-color: var(--c); font-weight: 700; }
+.sp-chip.on .sp-tick { background: var(--c); border-color: var(--c); }
+.sp-chip small { font-size: 12px; color: var(--ok); font-weight: 700; }
+.sp-chip.signed { border-style: dashed; }
+.sp-chip:disabled { background: #f3f5f7; color: var(--sub); cursor: default; border-color: #d6dbe1; }
+.sp-chip:disabled .sp-tick { display: none; }
+.sp-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; margin: 6px 0 10px; background: #eef4fb; border-radius: 10px; font-size: 14px; }
+.sp-selnone { padding: 8px 10px; margin: 6px 0 10px; background: #f6f8fa; border-radius: 10px; font-size: 13px; color: var(--sub); }
+.sp-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #c9d8ee; border-radius: 14px; padding: 2px 4px 2px 10px; font-size: 13px; }
+.sp-pill button { border: 0; background: #e3ebf6; color: #34507a; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-size: 12px; }
+.sp-pill button:hover { background: var(--bad); color: #fff; }
+.sg-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; position: sticky; bottom: 0; z-index: 2; background: #fff; padding: 10px 0; border-top: 1px solid var(--line); }
+.sg-what { background: #f6f8fa; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
+.sg-what ul { margin: 4px 0 0; padding-left: 18px; line-height: 1.6; }
+.sg-donelist { text-align: left; display: inline-block; margin: 0 0 12px; line-height: 1.7; }
+.sg-sticky { position: sticky; bottom: 0; padding: 10px 0 14px; background: linear-gradient(transparent, var(--bg) 30%); }
+.sg-sticky .btn { width: 100%; }
+
 /* QR로 들어온 서명 화면 (휴대폰) */
 main.sgv { max-width: 560px; padding: 12px; }
 .sg-sum .dl { grid-template-columns: 70px 1fr; font-size: 14px; }

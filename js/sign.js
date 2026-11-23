@@ -296,14 +296,14 @@
     const body = ov.querySelector('.pv-b');
     let cur = 0, z = 1;
     const fitted = new Set();
-    const SHEET_W = 793.7;   // 210mm
+    const PK = window.PrintKit;
     function apply() {
       const pg = ov.querySelector(`.pv-page[data-page="${cur}"]`);
       if (!pg) return;
       const sc = pg.querySelector('.pv-scale');
-      if (!fitted.has(cur)) { sc.style.zoom = '1'; window.PrintKit && window.PrintKit.fitPdfText(pg); fitted.add(cur); }
-      const base = Math.min(1, (body.clientWidth - 16) / SHEET_W);
-      sc.style.zoom = String(base * z);
+      if (!fitted.has(cur)) { PK.scaleSheet(sc, 1); PK.fitPdfText(pg); fitted.add(cur); }
+      const base = Math.min(1, (body.clientWidth - 16) / PK.SHEET_W);
+      PK.scaleSheet(sc, base * z);
     }
     ov.addEventListener('click', e => {
       const p = e.target.closest('[data-pg]');
@@ -359,7 +359,8 @@
   function panel(host, r, token, onSigns, popt) {
     const slots = slotsFor(r.types || []);
     const sel = new Set(), state = { tab: null };
-    const canEdit = !!(popt && popt.canEdit);
+    const canEdit = !!(popt && popt.canEdit), admin = !!(popt && popt.isAdmin);
+    const locked = () => r.locked || (r.signs.approver ? '승인자 서명 완료' : '');
     // ③ 작업 완료 확인 탭: 완료시간 (0:00~24:00, 30분 단위) — 인쇄물 '완료 시간' 줄에 나옴
     const doneTimeHtml = () => !(r.types || []).some(t => (typeById(t) || {}).completion === 'work') ? '' : `
       <div class="sp-donetime"><b>완료시간</b>
@@ -408,7 +409,8 @@
             ${pickerHtml({ slots, signed: r.signs, mode: 'staff', sel, state, extra: { done: doneTimeHtml() } })}
             <div class="sg-bar">
               <button class="btn" data-signsel ${toSign.length ? '' : 'disabled'}>✍ 고른 빈 칸 ${toSign.length}개 직접 서명</button>
-              <button class="btn bad" data-delsel ${toDel.length ? '' : 'disabled'}>고른 서명 ${toDel.length}개 지우기</button>
+              <button class="btn bad" data-delsel ${toDel.length && (!locked() || admin) ? '' : 'disabled'}>고른 서명 ${toDel.length}개 지우기${locked() ? ' (관리자·사유 필수)' : ''}</button>
+              ${locked() ? `<span class="muted small">🔒 잠긴 허가서(${esc(locked())}) — 받은 서명은 덮어쓸 수 없고, 지우기는 관리자만 사유를 적고 할 수 있습니다. 지운 기록은 남습니다.</span>` : ''}
             </div>
           </div>
         </section>`;
@@ -472,9 +474,15 @@
       if (e.target.closest('[data-delsel]')) {
         const list = slots.filter(s => sel.has(s.id) && r.signs[s.id]);
         if (!list.length) return;
-        if (!confirm(`고른 서명 ${list.length}개를 지울까요?\n\n${list.map(s => '· ' + slotLabel(s) + ' — ' + r.signs[s.id].name).join('\n')}`)) return;
+        const names = list.map(s => '· ' + slotLabel(s) + ' — ' + r.signs[s.id].name).join('\n');
+        let reason = '';
+        if (locked()) {
+          reason = prompt(`잠긴 허가서입니다. 서명 ${list.length}개를 지우는 사유를 적으세요. (기록에 남습니다)\n\n${names}`, '');
+          if (reason == null) return;
+          if (reason.trim().length < 2) return toast('사유를 적어야 지울 수 있습니다.');
+        } else if (!confirm(`고른 서명 ${list.length}개를 지울까요? (기록에 남습니다)\n\n${names}`)) return;
         try {
-          await window.api('deleteSign', token, r.id, list.map(s => s.id));
+          await window.api('deleteSign', token, r.id, list.map(s => s.id), reason.trim());
           list.forEach(s => { delete r.signs[s.id]; sel.delete(s.id); });
           if (onSigns) onSigns(); paint(); toast(`서명 ${list.length}개를 지웠습니다.`);
         } catch (err) { toast(errMsg(err)); }

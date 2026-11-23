@@ -79,7 +79,7 @@
 
   /* ---------- 공통 레이아웃 ---------- */
   function shell(active) {
-    const tabs = [['list', '허가서 대장'], ['new', '새 허가서'], ...(isAdmin() ? [['users', '가입 관리']] : [])];
+    const tabs = [['list', '허가서 대장'], ['new', '새 허가서'], ...(isAdmin() ? [['logs', '기록(로그)'], ['users', '가입 관리']] : [])];
     app.innerHTML = `
       <header class="top">
         <h1>${esc((window.CONFIG || {}).SITE_NAME || '안전작업허가서 작성 시스템')}</h1>
@@ -141,7 +141,9 @@
   function renderForm(view, d, mode) {
     const field = (label, path, opts = {}) => {
       const val = getPath(d, path) || '';
-      const ctl = opts.options
+      const ctl = opts.half   // 30분 단위 시간 (0:00~24:00, 빈칸 가능)
+        ? `<select data-bind="${path}">${K.doneTimeOptions(val)}</select>`
+        : opts.options
         ? `<select data-bind="${path}">${opts.options.map(o => `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}${val && !opts.options.includes(val) ? `<option selected>${esc(val)}</option>` : ''}</select>`
         : opts.textarea
         ? `<textarea data-bind="${path}" rows="${opts.rows || 3}" placeholder="${esc(opts.ph || '')}">${esc(val)}</textarea>`
@@ -164,6 +166,9 @@
           <button class="btn" data-save>저장</button>
         </div>
       </div>
+      ${mode === 'edit' && d.locked ? `<div class="lock-note">🔒 <b>잠긴 허가서</b> (${esc(d.locked)}) — 회색 칸은 고칠 수 없습니다.
+        이후 단계 이름·완료시간은 고칠 수 있고, 가스 측정시간·측정인·감시인은 <b>빈칸일 때만</b> 채울 수 있습니다.
+        다른 내용을 바꿔야 하면 상태를 「취소」로 바꾼 뒤 [복사해서 새로 작성]으로 다시 발행하세요.</div>` : ''}
 
       <section class="card">
         <h2><span class="step">1</span>허가서 종류</h2>
@@ -188,8 +193,8 @@
           ${dateField('발행일자', 'issueDate')}
           <div></div>
           ${dateField('작업일자', 'workDate')}
-          ${field('시작 시간', 'timeFrom', { type: 'time', step: 300 })}
-          ${field('종료 시간', 'timeTo', { type: 'time', step: 300 })}
+          ${field('시작 시간', 'timeFrom', { half: true })}
+          ${field('종료 시간', 'timeTo', { half: true })}
         </div>
         <p class="hint">비워 둔 날짜·시간·번호는 인쇄물에 빈칸으로 나와 손으로 적을 수 있습니다.</p>
         <div class="grid3">
@@ -215,7 +220,7 @@
         </div>
         <div class="grid4">
           ${field('운영근무자 (작업 완료 확인)', 'names.done_ops')}
-          <label class="fld"><span>완료시간 (작업 완료 확인)</span><select data-bind="doneTime">${K.doneTimeOptions(d.doneTime || '')}</select></label>
+          ${field('완료시간 (작업 완료 확인)', 'doneTime', { half: true })}
           ${field('공사담당자 (허가 연장확인)', 'names.ext')}
           ${field('관련부서 협조자 — 부서', 'names.coop_dept')}
           ${field('관련부서 협조자 — 직책', 'names.coop_title')}
@@ -251,7 +256,7 @@
             ${field('측정인', `${base}.extra.measurer`)}
           </div>
           <div class="gas-row">
-            ${[0, 1, 2, 3].map(n => field(`${n + 1}차 측정시간`, `${base}.gasTimes.${n}`, { type: 'time', step: 300 })).join('')}
+            ${[0, 1, 2, 3].map(n => field(`${n + 1}차 측정시간`, `${base}.gasTimes.${n}`, { half: true })).join('')}
             <button type="button" class="btn ghost sm" data-gasfill="${t.id}">⏱ 2시간 간격 자동 채우기</button>
           </div>
           <p class="hint">측정시간을 비워 두면 인쇄물에 빈칸으로 나옵니다. 1차 시간을 고르고 [자동 채우기]를 누르면 2시간 간격으로 채워지며, 점심시간에 걸리면 재작업 시각으로 맞춥니다.</p>` : '';
@@ -276,6 +281,20 @@
       }).join('');
     }
     drawSheets();
+    // 잠긴 허가서: 고칠 수 없는 칸은 막기 (서버도 같은 규칙으로 한 번 더 막음)
+    if (mode === 'edit' && d.locked) {
+      const orig = JSON.parse(JSON.stringify(d));
+      view.querySelectorAll('[data-bind]').forEach(el => {
+        const m = K.lockEditable(el.dataset.bind);
+        if (!m || (m === 'fill' && getPath(orig, el.dataset.bind))) {
+          el.disabled = true;
+          const box = el.closest('.fld, .check'); if (box) box.classList.add('locked');
+        }
+      });
+      view.querySelectorAll('[data-type], [data-linked], [data-nomode], [data-today], [data-clear], [data-allchk], [data-gasfill]').forEach(el => {
+        el.disabled = true; const box = el.closest('.fld, .check, .chip'); if (box) box.classList.add('locked');
+      });
+    }
 
     view.addEventListener('input', e => {
       const p = e.target.dataset.bind;
@@ -318,7 +337,10 @@
           sh.gasTimes = fillGasTimes(sh.gasTimes);
           sh.gasTimes.forEach((val, n) => {
             const inp = view.querySelector(`[data-bind="sheets.${gf.dataset.gasfill}.gasTimes.${n}"]`);
-            if (inp) inp.value = val;
+            if (inp) {
+              if (inp.tagName === 'SELECT' && val && ![...inp.options].some(o => o.value === val)) inp.add(new Option(val, val));
+              inp.value = val;
+            }
           });
         } catch (err) { alert(err.message); }
         return;
@@ -371,30 +393,50 @@
           <div class="actions">
             <a class="btn ghost" href="#/list">목록</a>
             <button class="btn" id="pBtn">🖨 인쇄</button>
-            ${canEdit ? `<a class="btn ghost" href="#/edit/${esc(r.id)}">수정</a>` : ''}
+            ${canEdit ? `<a class="btn ghost" href="#/edit/${esc(r.id)}">${r.locked ? '현장 기록 입력' : '수정'}</a>` : ''}
             <button class="btn ghost" id="cpBtn">복사해서 새로 작성</button>
-            ${canEdit ? '<button class="btn bad" id="delBtn">삭제</button>' : ''}
+            ${canEdit && !r.locked ? '<button class="btn bad" id="delBtn">삭제</button>' : ''}
           </div>
         </div>
         <div class="card">
           <div class="pick"><b>인쇄할 장</b>
             ${types.map(t => `<label class="check" style="margin:0"><input type="checkbox" data-pick="${t.id}" checked><span>${esc(t.name)}</span></label>`).join('')}
           </div>
-          ${canEdit ? `<div class="pick" style="margin-top:10px"><b>상태</b>
-            <select id="stSel" style="width:auto">${STATUSES.map(s => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-            <button class="btn ghost sm" id="stBtn">상태 변경</button></div>` : ''}
+          ${canEdit && r.status !== '취소' ? `<div class="pick" style="margin-top:10px"><b>상태</b>
+            <select id="stSel" style="width:auto">${STATUSES.filter(s => !r.locked || s !== '발행' || r.status === '발행').map(s => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+            <button class="btn ghost sm" id="stBtn">상태 변경</button>
+            ${r.status === '발행' ? '<span class="muted small">상태를 바꾸면 허가서가 잠기고 「발행」으로 되돌릴 수 없습니다.</span>' : ''}</div>` : ''}
+          ${r.locked ? `<div class="lock-note" style="margin:10px 0 0">🔒 <b>잠긴 허가서</b> (${esc(r.locked)}) — 발행 내용은 고칠 수 없고 삭제할 수 없습니다.
+            ${r.status === '취소' ? '취소된 허가서입니다.' : '바꿔야 하면 「취소」 후 [복사해서 새로 작성]으로 다시 발행하세요.'}</div>` : ''}
           <p class="hint" style="margin-bottom:0">인쇄 창에서 용지 A4, 배율 100%(또는 '실제 크기'), 여백 '없음', '배경 그래픽' 사용을 확인하세요.</p>
         </div>
         <div id="signPanel"></div>
+        <section class="card"><div class="sg-head"><h2 style="margin:0">📜 변경 기록 <span class="muted small">이 허가서의 발행·수정·서명·상태 변경 (고칠 수 없음)</span></h2>
+          <button class="btn ghost sm" id="histBtn">기록 보기</button></div><div id="histBox"></div></section>
       </div>
       <div class="sheets" id="sheetsBox">${sheetsHtml()}</div>`;
     window.PrintKit.fitPdfText(v);
+    // 휴대폰 등 좁은 화면: 양식을 화면 폭에 맞춰 축소 (두 손가락으로 확대 가능)
+    const box = () => v.querySelector('#sheetsBox');
+    const fit = () => window.PrintKit.fitSheets(box());
+    const onResize = () => { if (!box()) return window.removeEventListener('resize', onResize); fit(); };
+    window.addEventListener('resize', onResize);
+    fit();
     // 새 서명이 들어오면 인쇄 양식을 다시 그림 (인쇄할 장 선택은 유지)
     window.SignKit.panel(v.querySelector('#signPanel'), r, TOKEN, () => {
       v.querySelector('#sheetsBox').innerHTML = sheetsHtml();
       window.PrintKit.fitPdfText(v);
+      fit();
       refresh();
-    }, { canEdit });
+    }, { canEdit, isAdmin: isAdmin() });
+    document.getElementById('histBtn').onclick = e => {
+      const box = document.getElementById('histBox'), b = e.currentTarget;
+      if (box.innerHTML) { box.innerHTML = ''; b.textContent = '기록 보기'; return; }
+      box.innerHTML = '<div class="empty">불러오는 중…</div>';
+      api('listLogs', TOKEN, { permitId: r.id })
+        .then(res => { box.innerHTML = logTable(res.rows, true); b.textContent = '기록 닫기'; })
+        .catch(err => { box.innerHTML = ''; fail(err); });
+    };
     const refresh = () => {
       let first = true;
       v.querySelectorAll('.sheet-wrap').forEach(w => {
@@ -418,6 +460,68 @@
       api('setPermitStatus', TOKEN, r.id, document.getElementById('stSel').value)
         .then(() => { toast('상태를 변경했습니다.'); viewPermit(r.id); }).catch(fail).finally(() => busy(st, false));
     };
+  }
+
+  /* ---------- 기록(로그) — 보기 전용 ---------- */
+  const LOG_ACTIONS = ['허가서 발행', '허가서 수정', '상태 변경', '허가서 삭제', '서명', '서명 삭제', '수정 거부', 'QR 열기', 'QR 닫기', '로그인', '로그인 실패', '가입 신청', '가입 처리'];
+  const ACT_CLS = { '수정 거부': 'bad', '허가서 삭제': 'bad', '서명 삭제': 'bad', '로그인 실패': 'warn', '허가서 수정': 'warn', '상태 변경': 'warn' };
+  function logTable(rows, onePermit) {
+    if (!rows.length) return '<div class="empty">기록이 없습니다.</div>';
+    return `<div style="overflow-x:auto"><table class="logt"><thead><tr><th>#</th><th>시각</th><th>사용자</th><th>종류</th>${onePermit ? '' : '<th>허가서</th>'}<th>내용</th></tr></thead><tbody>
+      ${rows.map(x => `<tr>
+        <td class="muted">${esc(x.seq)}</td><td class="nw">${esc(x.at)}</td>
+        <td>${esc(x.userName)}${x.userId && x.userId !== x.userName ? `<div class="muted small">${esc(x.userId)}</div>` : ''}</td>
+        <td><span class="act ${ACT_CLS[x.action] || ''}">${esc(x.action)}</span></td>
+        ${onePermit ? '' : `<td class="nw">${x.permitId ? `<a href="#/view/${esc(x.permitId)}">${esc(x.permitNo || '(번호 없음)')}</a>` : ''}</td>`}
+        <td class="logd">${esc(x.detail).split(' | ').join('<br>')}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  function viewLogs() {
+    const v = shell('logs');
+    const d30 = new Date(Date.now() - 30 * 864e5);
+    const ymd = t => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    v.innerHTML = `
+      <div class="page-head"><div><h1>기록(로그)</h1>
+        <div class="muted small">허가서 발행·수정·서명·삭제·로그인 기록입니다. 이 화면과 서버에는 기록을 고치거나 지우는 기능이 없고, 줄마다 앞 줄과 이어진 도장(암호 확인값)이 찍혀 있어 시트를 직접 고치면 아래 검증에서 드러납니다.</div></div>
+        <div class="actions"><button class="btn ghost" id="lgCsv">⬇ CSV 내려받기</button></div></div>
+      <div class="card filters" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end">
+        <label class="fld" style="margin:0">시작일<input type="date" id="lgFrom" value="${ymd(d30)}"></label>
+        <label class="fld" style="margin:0">종료일<input type="date" id="lgTo" value="${ymd(new Date())}"></label>
+        <label class="fld" style="margin:0">종류<select id="lgAct"><option value="">전체</option>${LOG_ACTIONS.map(a => `<option>${a}</option>`).join('')}</select></label>
+        <label class="fld" style="margin:0;flex:1;min-width:160px">검색<input id="lgQ" placeholder="사용자·발행번호·내용"></label>
+        <button class="btn" id="lgGo">조회</button>
+      </div>
+      <div id="lgVer"></div>
+      <div class="card" id="lgBox"><div class="empty">불러오는 중…</div></div>`;
+    let rows = [];
+    const $ = id => document.getElementById(id);
+    const load = () => {
+      const b = $('lgGo'); busy(b, true);
+      api('listLogs', TOKEN, { from: $('lgFrom').value, to: $('lgTo').value, action: $('lgAct').value, q: $('lgQ').value })
+        .then(res => {
+          rows = res.rows;
+          const vf = res.verify;
+          $('lgVer').innerHTML = vf.ok
+            ? `<div class="ver ok">✅ 기록 전체 ${vf.count}건 검증 완료 — 고치거나 지운 흔적이 없습니다.</div>`
+            : `<div class="ver bad">⚠ 기록 검증 실패 — ${vf.tailMissing ? '마지막 기록 뒤의 줄이 지워진 것으로 보입니다.' : `${vf.badSeq}번 기록부터 고치거나 지운 흔적이 있습니다.`}
+                 시트를 직접 편집한 사람이 있는지 확인하세요. (그 앞의 기록은 정상)</div>`;
+          $('lgBox').innerHTML = `<div class="muted small" style="margin-bottom:6px">조건에 맞는 기록 ${res.total}건${res.total > rows.length ? ` (최근 ${rows.length}건만 표시 — 기간을 줄이세요)` : ''}</div>` + logTable(rows, false);
+        })
+        .catch(e => { fail(e); $('lgBox').innerHTML = ''; }).finally(() => busy(b, false));
+    };
+    $('lgGo').onclick = load;
+    $('lgQ').onkeydown = e => { if (e.key === 'Enter') load(); };
+    $('lgCsv').onclick = () => {
+      if (!rows.length) return toast('내려받을 기록이 없습니다.');
+      const q = x => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
+      const head = ['번호', '시각', '아이디', '이름', '종류', '발행번호', '내용', '도장'];
+      const body = rows.slice().reverse().map(x => [x.seq, x.at, x.userId, x.userName, x.action, x.permitNo, x.detail, x.hash].map(q).join(','));
+      const blob = new Blob(['\ufeff' + [head.map(q).join(',')].concat(body).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `작업허가서_기록_${$('lgFrom').value || '처음'}_${$('lgTo').value || ymd(new Date())}.csv`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    load();
   }
 
   /* ---------- 가입 관리 (관리자) ---------- */
@@ -453,7 +557,7 @@
                                     <button class="btn sm bad" data-act="반려" data-id="${esc(u.userId)}">사용 중지</button>`
                                 : `<button class="btn sm ok" data-act="승인" data-id="${esc(u.userId)}">재승인</button>`}</td></tr>`).join('')}
         </tbody></table></div>
-      <p class="muted">· 일반: 허가서 작성·조회·인쇄 · 관리자: 허가서 전체 수정/삭제 + 가입 관리</p>`;
+      <p class="muted">· 일반: 허가서 작성·조회·인쇄 · 관리자: 허가서 전체 수정/삭제 + 가입 관리 + 기록(로그) 보기 · 잠긴 허가서의 서명 지우기(사유 필수)</p>`;
     v.querySelectorAll('button[data-act]').forEach(b => {
       b.onclick = () => {
         const uid = b.dataset.id, act = b.dataset.act;
@@ -480,6 +584,7 @@
     if (page === 'edit' && arg) return viewForm(arg);
     if (page === 'view' && arg) return viewPermit(arg);
     if (page === 'users' && isAdmin()) return viewUsers();
+    if (page === 'logs' && isAdmin()) return viewLogs();
     return viewList();
   }
   window.addEventListener('hashchange', route);

@@ -93,7 +93,8 @@
     return `${y ? y + '년 ' : ''}${m ? (+m) + '월 ' : ''}${d ? (+d) + '일 ' : ''}${h1 ? h1 + ':' + n1 : '--:--'} ~ ${h2 ? h2 + ':' + n2 : '--:--'}`;
   }
 
-  // 완료시간: 0:00 ~ 24:00, 30분 단위 (빈칸 = 인쇄물에 수기)
+  // 30분 단위 시간 선택 (작업 시작·종료, 가스 측정, 완료시간): 0:00 ~ 24:00 (빈칸 = 인쇄물에 수기)
+  //  예전에 5분 단위로 저장된 값(09:05 등)은 목록 끝에 그대로 남겨서 지워지지 않게 함
   const DONE_TIMES = [];
   for (let m = 0; m <= 24 * 60; m += 30) DONE_TIMES.push(pad(Math.floor(m / 60)) + ':' + pad(m % 60));
   const doneTimeOptions = val => `<option value="" ${val ? '' : 'selected'}>(빈칸)</option>` +
@@ -101,6 +102,15 @@
     (val && DONE_TIMES.indexOf(val) < 0 ? `<option selected>${esc(val)}</option>` : '');
   const fmtDoneTime = v => { const [h, m] = String(v || '').split(':'); return h ? `${+h}시 ${m || '00'}분` : ''; };
 
-  window.Kit = { DONE_TIMES, doneTimeOptions, fmtDoneTime, TYPES, typeById, esc, nl, pad, today, STATUSES, GAS_ROUNDS, setPath, getPath, fillGasTimes,
+  // 발행 후 잠금 (서버 Code.gs 와 같은 규칙) — 잠긴 허가서에서 입력 칸이 고칠 수 있는지
+  //  'free' = 고칠 수 있음, 'fill' = 빈칸일 때만 채울 수 있음, false = 고칠 수 없음
+  function lockEditable(path) {
+    if (/^names\./.test(path) || path === 'doneTime') return 'free';
+    if (/^sheets\.[a-z]+\.gasTimes\.\d+$/.test(path)) return 'fill';
+    if (/^sheets\.[a-z]+\.extra\.(gasMeter|measurer|watcher)$/.test(path)) return 'fill';
+    return false;
+  }
+
+  window.Kit = { lockEditable, DONE_TIMES, doneTimeOptions, fmtDoneTime, TYPES, typeById, esc, nl, pad, today, STATUSES, GAS_ROUNDS, setPath, getPath, fillGasTimes,
     blankDraft, rememberPeople, ensureSheet, normalize, copyOf, recNo, linkedOn, fmtWorkTime };
 })();

@@ -167,6 +167,51 @@ main.sgv { max-width: 560px; padding: 12px; }
 .sg-big { font-size: 46px; }
 .sg-who-top { margin-bottom: 4px; }
 
+/* 칸 고르기: 카테고리 탭 → 역할 체크 (2026-11-23) */
+.sp-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; margin: 4px 0 0; }
+.sp-tab { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border: 1.5px solid var(--line); border-bottom: 0;
+  border-radius: 10px 10px 0 0; background: #f3f5f7; font: inherit; font-size: 14px; color: var(--sub); cursor: pointer; text-align: left; }
+.sp-tab small { font-size: 12px; }
+.sp-tab small em { font-style: normal; color: var(--pri); font-weight: 700; }
+.sp-tab.on { background: #fff; color: var(--ink); border-color: var(--pri); box-shadow: inset 0 3px 0 var(--pri); }
+.sp-tabbody { border: 1.5px solid var(--pri); border-radius: 0 0 10px 10px; padding: 10px; background: #fbfcfe; }
+.sp-tabhint { font-size: 13px; color: var(--sub); margin-bottom: 8px; }
+.sp-rolechk { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; width: 100%; padding: 4px 2px 8px; border: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); cursor: pointer; text-align: left; }
+.sp-rolechk:disabled { cursor: default; color: var(--sub); }
+.sp-box { width: 26px; height: 26px; border: 2px solid #9aa6b5; border-radius: 6px; display: inline-grid; place-items: center; font-weight: 800; color: #fff; background: #fff; flex: none; }
+.sp-rolechk.on .sp-box, .sp-rolechk.part .sp-box { background: var(--pri); border-color: var(--pri); }
+.sp-rolechk:disabled .sp-box { background: #e9edf1; border-color: #d6dbe1; }
+.sp-scope { font-size: 13px; color: var(--pri); font-weight: 700; }
+.sp-st { font-size: 12px; color: var(--ok); font-weight: 700; }
+.sp-stat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 38px; }
+.sp-stat small { font-size: 12px; color: var(--sub); }
+.sp-stat small.ok { color: var(--ok); font-weight: 700; }
+.sp-role .sp-chips { padding-left: 38px; }
+.sp-donetime { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: #fff; }
+.sp-donetime select { width: auto; min-width: 110px; }
+.sg-pvbtn { float: right; margin: 0 0 6px 8px; }
+
+/* 허가서 보기 창 */
+.pv-ov { position: fixed; inset: 0; z-index: 40; background: #39424d; display: flex; flex-direction: column; }
+.pv-h { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #16324f; color: #fff; flex-wrap: wrap; }
+.pv-h > b { font-size: 15px; }
+.pv-tabs { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+.pv-tabs button { border: 0; border-radius: 14px; padding: 5px 12px; background: #ffffff26; color: #fff; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.pv-tabs button.on { background: #fff; color: var(--c); font-weight: 700; }
+.pv-z { display: flex; gap: 4px; }
+.pv-z button { width: 34px; height: 32px; border: 0; border-radius: 6px; background: #ffffff26; color: #fff; font-size: 18px; cursor: pointer; }
+.pv-b { flex: 1; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
+.pv-scale { width: max-content; margin: 0 auto; }
+.pv-f { font-size: 12px; color: #dfe5ec; padding: 6px 10px; background: #16324f; }
+@media (max-width: 560px) {
+  .sp-tabs { grid-template-columns: 1fr 1fr; margin-bottom: 8px; }
+  .sp-tab { border-bottom: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+  .sp-tab.on { border-color: var(--pri); background: #eef4fb; }
+  .sp-tabbody { border-radius: 10px; }
+  .pv-tabs { order: 5; flex-basis: 100%; }
+  .pv-h > b { flex: 1; }
+}
+
 /* ============ 인쇄 ============ */
 @page { size: A4 portrait; margin: 0; }
 @media print {

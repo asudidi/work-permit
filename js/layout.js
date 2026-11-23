@@ -400,6 +400,7 @@
     function doneRows(x0, labT, labX, inX, ys) {
       const [yT, yDot, y1, y2, y3] = ys;
       at(labT, yT, '완&nbsp;&nbsp;료&nbsp;&nbsp;&nbsp;시&nbsp;&nbsp;간&nbsp;:');
+      if (r.doneTime && window.Kit) at(labT + 250, yT, esc(window.Kit.fmtDoneTime(r.doneTime)), { b: true, x1: R - 8 });
       hl(yDot, x0 + 2, R - 2, 2, 'dot');
       [[y1, ['작', '업', '자'], 'done_worker'], [y2, ['감', '독', '자'], 'done_supervisor']].forEach(([y, chs, fk]) => {
         chs.forEach((ch, k) => at(labX + k * 76, y, ch));

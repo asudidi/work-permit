@@ -215,6 +215,7 @@
         </div>
         <div class="grid4">
           ${field('운영근무자 (작업 완료 확인)', 'names.done_ops')}
+          <label class="fld"><span>완료시간 (작업 완료 확인)</span><select data-bind="doneTime">${K.doneTimeOptions(d.doneTime || '')}</select></label>
           ${field('공사담당자 (허가 연장확인)', 'names.ext')}
           ${field('관련부서 협조자 — 부서', 'names.coop_dept')}
           ${field('관련부서 협조자 — 직책', 'names.coop_title')}
@@ -393,7 +394,7 @@
       v.querySelector('#sheetsBox').innerHTML = sheetsHtml();
       window.PrintKit.fitPdfText(v);
       refresh();
-    });
+    }, { canEdit });
     const refresh = () => {
       let first = true;
       v.querySelectorAll('.sheet-wrap').forEach(w => {

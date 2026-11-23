@@ -41,7 +41,7 @@
     try { last = JSON.parse(localStorage.getItem('wp_lastPeople') || '{}'); } catch (e) { last = {}; }
     const p = k => Object.assign({ dept: '', title: '', name: '' }, last[k]);
     return {
-      id: null, status: '발행', noMode: 'auto', no: '', issueDate: '', workDate: '', timeFrom: '', timeTo: '',
+      id: null, status: '발행', noMode: 'auto', no: '', issueDate: '', workDate: '', timeFrom: '', timeTo: '', doneTime: '',
       applicant: p('applicant'), issuer: p('issuer'), approver: p('approver'),
       title: '', area: '', equipNo: '', equipName: '', summary: '',
       contractor: '', worker: '', supervisor: '', witness: '',
@@ -75,7 +75,7 @@
   function copyOf(rec) {
     const d = normalize(JSON.parse(JSON.stringify(rec)));
     d.id = null; d.no = ''; d.noMode = 'auto'; d.status = '발행';
-    d.issueDate = ''; d.workDate = ''; d.timeFrom = ''; d.timeTo = '';
+    d.issueDate = ''; d.workDate = ''; d.timeFrom = ''; d.timeTo = ''; d.doneTime = '';
     Object.values(d.sheets).forEach(s => { s.gasTimes = ['', '', '', '']; });
     ['createdAt', 'updatedAt', 'authorId', 'authorName', 'authorDept', 'permitNo', 'signs'].forEach(k => delete d[k]);   // 서명은 복사하지 않음
     return d;
@@ -93,6 +93,14 @@
     return `${y ? y + '년 ' : ''}${m ? (+m) + '월 ' : ''}${d ? (+d) + '일 ' : ''}${h1 ? h1 + ':' + n1 : '--:--'} ~ ${h2 ? h2 + ':' + n2 : '--:--'}`;
   }
 
-  window.Kit = { TYPES, typeById, esc, nl, pad, today, STATUSES, GAS_ROUNDS, setPath, getPath, fillGasTimes,
+  // 완료시간: 0:00 ~ 24:00, 30분 단위 (빈칸 = 인쇄물에 수기)
+  const DONE_TIMES = [];
+  for (let m = 0; m <= 24 * 60; m += 30) DONE_TIMES.push(pad(Math.floor(m / 60)) + ':' + pad(m % 60));
+  const doneTimeOptions = val => `<option value="" ${val ? '' : 'selected'}>(빈칸)</option>` +
+    DONE_TIMES.map(t => `<option ${t === val ? 'selected' : ''}>${t}</option>`).join('') +
+    (val && DONE_TIMES.indexOf(val) < 0 ? `<option selected>${esc(val)}</option>` : '');
+  const fmtDoneTime = v => { const [h, m] = String(v || '').split(':'); return h ? `${+h}시 ${m || '00'}분` : ''; };
+
+  window.Kit = { DONE_TIMES, doneTimeOptions, fmtDoneTime, TYPES, typeById, esc, nl, pad, today, STATUSES, GAS_ROUNDS, setPath, getPath, fillGasTimes,
     blankDraft, rememberPeople, ensureSheet, normalize, copyOf, recNo, linkedOn, fmtWorkTime };
 })();

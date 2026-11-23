@@ -31,6 +31,13 @@
     ['정전작업 차단 확인', ['cutoff_work', 'cutoff_ops']],
     ['굴착 항목 확인자', ['c0', 'c1', 'c2', 'c3', 'c4']]
   ];
+  // 칸 고르기 탭 (2026-11-23): 카테고리 탭 → 역할(하위 항목) 체크 = 전체 허가서 일괄
+  const CATS = [
+    { id: 'issue', title: '① 안전작업허가서 발행', keys: ['applicant', 'issuer', 'approver'] },
+    { id: 'site', title: '② 현장 안전조치 확인', keys: ['worker', 'supervisor', 'witness'] },
+    { id: 'done', title: '③ 작업 완료 확인', keys: ['done_worker', 'done_supervisor', 'done_ops', 'power_restore'] },
+    { id: 'etc', title: '기타 서명', keys: ['coop', 'ext', 'cutoff_work', 'cutoff_ops', 'c0', 'c1', 'c2', 'c3', 'c4'] }
+  ];
   const fsId = (tid, key) => (key in SHARED ? key : tid + ':' + key);
 
   /** 이 허가서(묶음)의 서명 칸 [{id, key, tid, role, short}] */
@@ -81,41 +88,67 @@
   }
   const errMsg = e => (e && e.message) ? e.message : String(e);
 
-  /* ---------- 칸 고르기 (역할 줄 + 허가서 칩) ----------
-   * opt: { slots, signed: {id: {name,...}|이름}, mode: 'visitor'|'staff', sel: Set, onChange() }
-   * - visitor: 서명된 칩은 고를 수 없음
-   * - staff  : 서명된 칩도 고를 수 있음 (지우기용)
+  /* ---------- 칸 고르기 (카테고리 탭 → 역할 체크 → 허가서 칩) ----------
+   * opt: { slots, signed: {id: {name,...}|이름}, mode: 'visitor'|'staff', sel: Set, state: {tab}, extra: {탭id: html}, onChange() }
+   * - 역할 체크 = 그 역할의 전체 허가서 칸 일괄 선택 (칩으로 허가서 하나씩 빼거나 넣을 수 있음)
+   * - visitor: 서명된 칸은 고를 수 없음
+   * - staff  : 서명된 칸도 고를 수 있음 (지우기용)
    */
   function pickerHtml(opt) {
-    const { slots, signed, mode, sel } = opt;
+    const { slots, signed, mode, sel, state } = opt;
     const isSigned = id => !!signed[id];
     const signedName = id => { const s = signed[id]; return s ? (typeof s === 'string' ? s : s.name) : ''; };
     const can = id => mode === 'staff' || !isSigned(id);
+    const typeIds = [...new Set(slots.filter(s => !(s.key in SHARED)).map(s => s.tid))];
+    const tbadge = tid => { const t = typeById(tid); return t ? `<span class="badge" style="--c:${t.color}">${esc(t.short)}</span>` : ''; };
     const chip = s => {
       const on = sel.has(s.id), sg = isSigned(s.id);
       const t = s.tid && typeById(s.tid);
-      const label = s.key in SHARED ? '전체 허가서 공통' : s.short;
       return `<button type="button" class="sp-chip ${on ? 'on' : ''} ${sg ? 'signed' : ''}" data-id="${esc(s.id)}" ${can(s.id) ? '' : 'disabled'}
-        style="--c:${s.key in SHARED ? '#1f5fae' : (t ? t.color : '#555')}" aria-pressed="${on}">
-        <span class="sp-tick">${on ? '✓' : ''}</span>${esc(label)}${sg ? `<small>${mode === 'staff' ? esc(signedName(s.id)) : '서명 완료'}</small>` : ''}</button>`;
+        style="--c:${t ? t.color : '#555'}" aria-pressed="${on}">
+        <span class="sp-tick">${on ? '✓' : ''}</span>${esc(s.short)}${sg ? `<small>${mode === 'staff' ? esc(signedName(s.id)) : '서명 완료'}</small>` : ''}</button>`;
     };
-    return SECTIONS.map(([title, keys]) => {
-      const rows = keys.map(k => slots.filter(s => s.key === k)).filter(a => a.length);
+    const roleRow = list => {
+      const k = list[0].key, shared = k in SHARED;
+      const pickable = list.filter(s => can(s.id));
+      const nSel = pickable.filter(s => sel.has(s.id)).length;
+      const all = pickable.length > 0 && nSel === pickable.length;
+      const nSigned = list.filter(s => isSigned(s.id)).length;
+      const count = shared ? typeIds.length : list.length;
+      const scope = count > 1 ? `전체 허가서 ${count}장 일괄` : '허가서 1장';
+      const state1 = !pickable.length ? '모두 서명 완료' : nSigned ? `${nSigned}/${list.length}칸 서명됨` : '';
+      // 칸이 하나뿐이면(공통 칸 또는 허가서 1장) 칩 대신 허가서 표시 + 서명 상태
+      const one = list.length === 1 ? `<div class="sp-stat">${(shared ? typeIds : [list[0].tid]).map(tbadge).join('')}
+          ${isSigned(list[0].id) ? `<small class="ok">✓ ${mode === 'staff' ? esc(signedName(list[0].id)) + ' 서명' : '서명 완료'}</small>` : '<small>서명 전</small>'}</div>`
+        : `<div class="sp-chips">${list.map(chip).join('')}</div>`;
+      return `<div class="sp-role ${nSel ? 'on' : ''}">
+        <button type="button" class="sp-rolechk ${all ? 'on' : nSel ? 'part' : ''}" data-all="${esc(k)}" ${pickable.length ? '' : 'disabled'} aria-pressed="${all}">
+          <span class="sp-box">${all ? '✓' : nSel ? '–' : ''}</span>
+          <b>${esc(list[0].role)}</b><span class="sp-scope">${esc(scope)}</span>${state1 ? `<small class="sp-st">${esc(state1)}</small>` : ''}
+        </button>
+        ${one}
+      </div>`;
+    };
+    const cats = CATS.map(c => Object.assign({}, c, { list: slots.filter(s => c.keys.includes(s.key)) })).filter(c => c.list.length);
+    if (!cats.some(c => c.id === state.tab)) {
+      const firstOpen = cats.find(c => c.list.some(s => !isSigned(s.id)));
+      state.tab = (firstOpen || cats[0] || {}).id;
+    }
+    const cur = cats.find(c => c.id === state.tab);
+    const tabs = `<div class="sp-tabs" role="tablist">${cats.map(c => {
+      const n = c.list.filter(s => sel.has(s.id)).length, done = c.list.filter(s => isSigned(s.id)).length;
+      return `<button type="button" role="tab" class="sp-tab ${c.id === state.tab ? 'on' : ''}" data-tab="${c.id}" aria-selected="${c.id === state.tab}">
+        <b>${esc(c.title)}</b><small>서명 ${done}/${c.list.length}${n ? ` · <em>고름 ${n}</em>` : ''}</small></button>`;
+    }).join('')}</div>`;
+    if (!cur) return tabs;
+    const body = SECTIONS.map(([title, keys]) => {
+      const rows = keys.filter(k => cur.keys.includes(k)).map(k => slots.filter(s => s.key === k)).filter(a => a.length);
       if (!rows.length) return '';
-      return `<div class="sp-sec"><div class="sg-grp">${esc(title)}</div>${rows.map(list => {
-        const pickable = list.filter(s => can(s.id));
-        const all = pickable.length && pickable.every(s => sel.has(s.id));
-        const some = pickable.some(s => sel.has(s.id));
-        const multi = list.length > 1;
-        return `<div class="sp-role ${some ? 'on' : ''}">
-          <div class="sp-rh">
-            <b>${esc(list[0].role)}</b>
-            ${multi && pickable.length > 1 ? `<button type="button" class="sp-all ${all ? 'on' : ''}" data-all="${esc(list[0].key)}">${all ? '전체 해제' : `전체 ${pickable.length}장 고르기`}</button>` : ''}
-          </div>
-          <div class="sp-chips">${list.map(chip).join('')}</div>
-        </div>`;
-      }).join('')}</div>`;
+      return `<div class="sp-sec">${cur.id === 'etc' ? `<div class="sg-grp">${esc(title)}</div>` : ''}${rows.map(roleRow).join('')}</div>`;
     }).join('');
+    return `${tabs}<div class="sp-tabbody">
+      <div class="sp-tabhint">하위 항목(역할)을 체크하면 그 역할의 <b>전체 허가서 칸이 한꺼번에</b> 골라집니다. 한 장만 하려면 아래 허가서 칩으로 빼세요.</div>
+      ${body}${(opt.extra && opt.extra[cur.id]) || ''}</div>`;
   }
   /** 고른 칸 요약 (✕로 하나씩 빼기 · 모두 해제) */
   function selectedHtml(slots, sel) {
@@ -128,10 +161,12 @@
   /** 고르기 동작 (클릭 위임). 바뀌면 onChange */
   function bindPicker(root, opt) {
     root.addEventListener('click', e => {
+      const tb = e.target.closest('.sp-tab[data-tab]');
+      if (tb) { opt.state.tab = tb.dataset.tab; return opt.onChange(); }
       const c = e.target.closest('.sp-chip[data-id]');
       if (c && !c.disabled) { const id = c.dataset.id; opt.sel.has(id) ? opt.sel.delete(id) : opt.sel.add(id); return opt.onChange(); }
       const a = e.target.closest('[data-all]');
-      if (a) {
+      if (a && !a.disabled) {
         const list = opt.slots.filter(s => s.key === a.dataset.all && (opt.mode === 'staff' || !opt.signed[s.id]));
         const all = list.every(s => opt.sel.has(s.id));
         list.forEach(s => (all ? opt.sel.delete(s.id) : opt.sel.add(s.id)));
@@ -194,7 +229,9 @@
   /** 이름 입력 → [확인] → 손서명 → [서명 완료]  (직원 직접 서명 창 · QR/링크 서명 화면 공용) */
   function signFlow(host, opt) {
     let name = opt.name || '';
-    const what = opt.what ? `<div class="sg-what">${opt.what}</div>` : '';
+    const pv = opt.preview ? '<button type="button" class="btn ghost sm sg-pvbtn" data-pv>📄 허가서 보기</button>' : '';
+    const what = opt.what ? `<div class="sg-what">${pv}${opt.what}</div>` : pv;
+    if (opt.preview) host.addEventListener('click', e => { if (e.target.closest('[data-pv]')) opt.preview(); });
     function stepName() {
       host.innerHTML = `${what}
         <label class="fld sg-name"><span>이름</span><input id="sgName" value="${esc(name)}" maxlength="20" autocomplete="off" placeholder="본인 이름을 입력하세요"></label>
@@ -231,6 +268,63 @@
   // 고른 칸 목록 (서명 창 위에 '어디에 들어가는지' 표시)
   const whatHtml = list => `<b>서명이 들어갈 칸 ${list.length}개</b><ul>${list.map(s => `<li>${esc(slotLabel(s))}</li>`).join('')}</ul>`;
 
+  /* ---------- 허가서 보기 (서명하면서 내용 확인) ----------
+   * rec: 허가서 본문, signed: {칸id: {name,image}|이름}, hi: 강조할 칸 id 목록(지금 서명할 칸)
+   * 휴대폰 폭에 맞춰 축소해서 보여 주고 [＋]/[−]로 확대 · 허가서가 여러 장이면 탭으로
+   */
+  function showPermit(rec, signed, hi) {
+    const K = window.Kit, LAY = window.PermitFormLayout;
+    if (!rec || !LAY) return toast('허가서 내용을 불러오지 못했습니다.');
+    const r = K.normalize(JSON.parse(JSON.stringify(rec)));
+    const types = TYPES.filter(t => r.types.includes(t.id));
+    const sg = signed || {};
+    const ctx = { esc, nl: K.nl, linkedOn: K.linkedOn, recNo: K.recNo, unapproved: false,
+      signOf: (tid, key) => { const s = sg[fsId(tid, key)]; return s ? (typeof s === 'string' ? { name: s } : s) : null; } };
+    const hiTypes = new Set((hi || []).map(id => (id.indexOf(':') > 0 ? id.split(':')[0] : '*')));
+    const ov = document.createElement('div');
+    ov.className = 'pv-ov no-print';
+    ov.innerHTML = `
+      <div class="pv-h">
+        <b>📄 허가서 보기</b>
+        <div class="pv-tabs">${types.map((t, i) => `<button type="button" data-pg="${i}" class="${i ? '' : 'on'}" style="--c:${t.color}">${esc(t.short)}${hiTypes.has(t.id) || hiTypes.has('*') ? ' ✍' : ''}</button>`).join('')}</div>
+        <div class="pv-z"><button type="button" data-z="-1" aria-label="축소">−</button><button type="button" data-z="1" aria-label="확대">＋</button></div>
+        <button type="button" class="btn sm" data-x>닫기</button>
+      </div>
+      <div class="pv-b">${types.map((t, i) => `<div class="pv-page" data-page="${i}" ${i ? 'hidden' : ''}><div class="pv-scale">${LAY.render(r, t, ctx) || `<p>「${esc(t.name)}」 양식이 없습니다.</p>`}</div></div>`).join('')}</div>
+      <div class="pv-f">${hi && hi.length ? '✍ 표시 = 지금 서명할 칸이 있는 허가서 · ' : ''}손가락 두 개로 벌려도 확대됩니다</div>`;
+    document.body.appendChild(ov);
+    const body = ov.querySelector('.pv-b');
+    let cur = 0, z = 1;
+    const fitted = new Set();
+    const SHEET_W = 793.7;   // 210mm
+    function apply() {
+      const pg = ov.querySelector(`.pv-page[data-page="${cur}"]`);
+      if (!pg) return;
+      const sc = pg.querySelector('.pv-scale');
+      if (!fitted.has(cur)) { sc.style.zoom = '1'; window.PrintKit && window.PrintKit.fitPdfText(pg); fitted.add(cur); }
+      const base = Math.min(1, (body.clientWidth - 16) / SHEET_W);
+      sc.style.zoom = String(base * z);
+    }
+    ov.addEventListener('click', e => {
+      const p = e.target.closest('[data-pg]');
+      if (p) {
+        cur = +p.dataset.pg;
+        ov.querySelectorAll('[data-pg]').forEach(b => b.classList.toggle('on', b === p));
+        ov.querySelectorAll('.pv-page').forEach(d => { d.hidden = +d.dataset.page !== cur; });
+        body.scrollTop = 0; body.scrollLeft = 0; apply(); return;
+      }
+      const zb = e.target.closest('[data-z]');
+      if (zb) { z = Math.max(1, Math.min(3, z + (+zb.dataset.z) * 0.5)); apply(); return; }
+      if (e.target.closest('[data-x]')) close();
+    });
+    const onKey = e => { if (e.key === 'Escape') close(); };
+    const onResize = () => apply();
+    function close() { ov.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); }
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onResize);
+    apply();
+  }
+
   function modal(title, bodyHtml) {
     const ov = document.createElement('div');
     ov.className = 'sg-ov no-print';
@@ -262,9 +356,16 @@
   }
 
   /* ---------- 직원 화면: 허가서 보기 안의 [손서명] 칸 ---------- */
-  function panel(host, r, token, onSigns) {
+  function panel(host, r, token, onSigns, popt) {
     const slots = slotsFor(r.types || []);
-    const sel = new Set();
+    const sel = new Set(), state = { tab: null };
+    const canEdit = !!(popt && popt.canEdit);
+    // ③ 작업 완료 확인 탭: 완료시간 (0:00~24:00, 30분 단위) — 인쇄물 '완료 시간' 줄에 나옴
+    const doneTimeHtml = () => !(r.types || []).some(t => (typeById(t) || {}).completion === 'work') ? '' : `
+      <div class="sp-donetime"><b>완료시간</b>
+        ${canEdit ? `<select id="sgDoneTime">${window.Kit.doneTimeOptions(r.doneTime)}</select>
+        <button type="button" class="btn sm" data-donesave>저장</button>` : `<span>${esc(window.Kit.fmtDoneTime(r.doneTime) || '(빈칸)')}</span>`}
+        <span class="muted small">0:00~24:00, 30분 단위 · 비우면 인쇄물에 빈칸</span></div>`;
     let link = null, timer = null, busy = false;
     r.signs = r.signs || {};
     const sigKey = s => JSON.stringify(Object.keys(s).sort().map(k => [k, s[k].name, s[k].at]));
@@ -302,9 +403,9 @@
             </div>
           </div>` : ''}
           <div class="sg-pickwrap">
-            <div class="sg-pickhead"><b>칸 고르기</b> <span class="muted small">역할을 [전체]로 고르면 모든 허가서에 한 번에, 칩 하나만 고르면 그 허가서만. 서명된 칩을 고르면 지울 수 있습니다.</span></div>
+            <div class="sg-pickhead"><b>칸 고르기</b> <span class="muted small">카테고리 탭 → 역할 체크(전체 허가서 일괄). 칩 하나만 고르면 그 허가서만. 서명된 칸을 고르면 지울 수 있습니다.</span></div>
             ${selectedHtml(slots, sel)}
-            ${pickerHtml({ slots, signed: r.signs, mode: 'staff', sel })}
+            ${pickerHtml({ slots, signed: r.signs, mode: 'staff', sel, state, extra: { done: doneTimeHtml() } })}
             <div class="sg-bar">
               <button class="btn" data-signsel ${toSign.length ? '' : 'disabled'}>✍ 고른 빈 칸 ${toSign.length}개 직접 서명</button>
               <button class="btn bad" data-delsel ${toDel.length ? '' : 'disabled'}>고른 서명 ${toDel.length}개 지우기</button>
@@ -334,7 +435,7 @@
     }
     function stop() { clearTimeout(timer); timer = null; }
 
-    bindPicker(host, { slots, get signed() { return r.signs; }, mode: 'staff', sel, onChange: paint });
+    bindPicker(host, { slots, get signed() { return r.signs; }, mode: 'staff', sel, state, onChange: paint });
     host.addEventListener('click', async e => {
       const q = e.target.closest('[data-qr]');
       if (q) {
@@ -358,6 +459,16 @@
         return;
       }
       if (e.target.closest('.sg-url')) { e.target.select(); return; }
+      const ds = e.target.closest('[data-donesave]');
+      if (ds) {
+        const val = host.querySelector('#sgDoneTime').value;
+        const body = JSON.parse(JSON.stringify(r)); delete body.signs; body.doneTime = val;
+        ds.disabled = true;
+        try { await window.api('savePermit', token, body); r.doneTime = val; if (onSigns) onSigns(); toast(val ? `완료시간 ${val} 저장했습니다.` : '완료시간을 비웠습니다.'); }
+        catch (err) { toast(errMsg(err)); }
+        paint();
+        return;
+      }
       if (e.target.closest('[data-delsel]')) {
         const list = slots.filter(s => sel.has(s.id) && r.signs[s.id]);
         if (!list.length) return;
@@ -376,6 +487,7 @@
         const m = modal('직접 서명', '<div id="sgFlow"></div>');
         signFlow(m.root.querySelector('#sgFlow'), {
           name: names.length === 1 ? names[0] : '', what: whatHtml(list), cancel: m.close,
+          preview: () => showPermit(r, r.signs, list.map(s => s.id)),
           submit: async (name, png) => {
             await window.api('saveSign', token, r.id, list.map(s => s.id), name, '', png);
             list.forEach(s => sel.delete(s.id));
@@ -400,7 +512,9 @@
     app.innerHTML = `<header class="top"><h1>안전작업허가서 서명</h1></header><main class="sgv" id="sgv"><div class="card empty">불러오는 중…</div></main>`;
     const v = app.querySelector('#sgv');
     let info = null, slots = [];
-    const sel = new Set();
+    const sel = new Set(), state = { tab: null };
+    const preview = hi => showPermit(info && info.rec, info && info.signed, hi);
+    v.addEventListener('click', e => { if (e.target.closest('[data-pvopen]')) preview([...sel]); });
     const closed = msg => {
       v.innerHTML = `<div class="card sg-closed"><div class="sg-big">🔒</div><h2>서명 받기가 닫혀 있습니다</h2><p class="muted">${esc(msg)}</p></div>`;
     };
@@ -419,21 +533,22 @@
           ${when ? `<dt>작업일시</dt><dd>${esc(when)}</dd>` : ''}
           ${info.contractor ? `<dt>작업업체</dt><dd>${esc(info.contractor)}</dd>` : ''}
           ${info.summary ? `<dt>작업개요</dt><dd>${esc(info.summary)}</dd>` : ''}
-        </dl></div>`;
+        </dl>
+        ${info.rec ? '<button type="button" class="btn ghost full" data-pvopen>📄 허가서 전체 보기 (내용 확인)</button>' : ''}</div>`;
     }
     function drawPick() {
       const n = sel.size;
       v.innerHTML = `${summary()}
         <div class="card">
           <h2>서명할 칸을 고르세요</h2>
-          <p class="hint">본인 역할의 칸을 누르세요. <b>여러 칸을 고르면 한 번 서명으로 모두</b> 들어갑니다. 허가서마다 있는 칸은 [전체 고르기]로 한 번에 고를 수 있습니다.</p>
+          <p class="hint">위 탭에서 단계를 고르고 <b>본인 역할을 체크</b>하세요. 체크하면 전체 허가서 칸이 한꺼번에 골라지고, <b>한 번 서명으로 모두</b> 들어갑니다.</p>
           <div id="sgSel">${selectedHtml(slots, sel)}</div>
-          ${pickerHtml({ slots, signed: info.signed, mode: 'visitor', sel })}
+          ${pickerHtml({ slots, signed: info.signed, mode: 'visitor', sel, state })}
         </div>
         <div class="sg-sticky"><button class="btn big ok" id="sgGo" ${n ? '' : 'disabled'}>${n ? `고른 ${n}칸 서명하기 ›` : '칸을 고르세요'}</button></div>`;
       v.querySelector('#sgGo').onclick = drawSign;
     }
-    bindPicker(v, { get slots() { return slots; }, get signed() { return info ? info.signed : {}; }, mode: 'visitor', sel, onChange: () => { const y = window.scrollY; drawPick(); window.scrollTo(0, y); } });
+    bindPicker(v, { get slots() { return slots; }, get signed() { return info ? info.signed : {}; }, mode: 'visitor', sel, state, onChange: () => { const y = window.scrollY; drawPick(); window.scrollTo(0, y); } });
     function drawSign() {
       const list = slots.filter(s => sel.has(s.id));
       if (!list.length) return;
@@ -445,6 +560,7 @@
       v.querySelector('#sgBack').onclick = drawPick;
       signFlow(v.querySelector('#sgFlow'), {
         what: whatHtml(list),
+        preview: info.rec ? () => preview(list.map(s => s.id)) : null,
         submit: async (name, png) => {
           let res;
           try { res = await window.api('signSubmit', id, code, list.map(s => s.id), name, png); }
@@ -464,5 +580,5 @@
     loadInfo();
   }
 
-  window.SignKit = { slotsFor, fsId, makePad, panel, visitorPage };
+  window.SignKit = { slotsFor, fsId, makePad, panel, visitorPage, showPermit };
 })();
